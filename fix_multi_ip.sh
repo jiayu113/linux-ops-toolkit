@@ -9,7 +9,7 @@ NETPLAN_FILE="/etc/netplan/00-static-ip.yaml"  # 配置文件路径
 
 # ===================== 前置检查 =====================
 # 检查是否为root用户
-if[ "$(id -u)" -ne 0 ]; then
+if [ "$(id -u)" -ne 0 ]; then
     echo -e "\033[31m错误：必须以root用户执行此脚本（请加sudo）\033[0m"
     exit 1
 fi
@@ -23,7 +23,7 @@ if ! ip link show "$NETWORK_INTERFACE" > /dev/null 2>&1; then
 fi
 
 # ===================== 备份原有配置 =====================
-if[ -f "$NETPLAN_FILE" ]; then
+if [ -f "$NETPLAN_FILE" ]; then
     BACKUP_FILE="${NETPLAN_FILE}.fix_multi_ip_bak_$(date +%Y%m%d_%H%M%S)"
     cp "$NETPLAN_FILE" "$BACKUP_FILE"
     echo -e "\033[33m已备份原有配置到：$BACKUP_FILE\033[0m"

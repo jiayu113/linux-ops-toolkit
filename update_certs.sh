@@ -54,7 +54,7 @@ fi
 
 # 重载 Nginx
 log "正在重载 Nginx..."
-if[ -f "/usr/local/nginx/sbin/nginx" ]; then
+if [ -f "/usr/local/nginx/sbin/nginx" ]; then
     /usr/local/nginx/sbin/nginx -s reload
     log "Nginx 重载命令已发送。"
 else

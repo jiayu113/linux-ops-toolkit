@@ -13,7 +13,7 @@ echo ">>> [$(date)] 启动远程任务：清理 SERVER_A 的 FreeSWITCH 日志"
 # 通过 SSH 发送“远程命令集”
 $SSH_CMD root@$SERVER_A << EOF
     echo "--- 远程环境检查 ---"
-    if[ ! -d "$LOG_DIR_A" ]; then
+    if [ ! -d "$LOG_DIR_A" ]; then
         echo "错误: 远程服务器目录 $LOG_DIR_A 不存在！"
         exit 1
     fi

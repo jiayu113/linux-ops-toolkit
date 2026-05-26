@@ -8,7 +8,7 @@ DNS_SERVERS="8.8.8.8, 114.114.114.114"
 NETPLAN_FILE="/etc/netplan/00-static-ip.yaml"  
 # ===================== 前置检查 =====================
 # 检查是否为root用户
-if[ "$(id -u)" -ne 0 ]; then
+if [ "$(id -u)" -ne 0 ]; then
     echo -e "\033[31m错误：必须以root用户执行此脚本\033[0m"
     exit 1
 fi
@@ -35,7 +35,7 @@ fi
 echo -e "\033[32m检测到活跃网卡：$NETWORK_INTERFACE\033[0m"
 
 # ===================== 备份原有配置 =====================
-if[ -f "$NETPLAN_FILE" ]; then
+if [ -f "$NETPLAN_FILE" ]; then
     BACKUP_FILE="${NETPLAN_FILE}.bak_$(date +%Y%m%d_%H%M%S)"
     cp "$NETPLAN_FILE" "$BACKUP_FILE"
     echo -e "\033[33m已备份原有配置到：$BACKUP_FILE\033[0m"
@@ -69,7 +69,7 @@ sudo netplan apply
 # 验证IP是否生效
 echo -e "\n\033[32m===== 配置结果验证 =====\033[0m"
 CURRENT_IP=$(ip addr show "$NETWORK_INTERFACE" | grep 'inet ' | awk '{print $2}' | head -n1)
-if[ "$CURRENT_IP" = "$STATIC_IP" ]; then
+if [ "$CURRENT_IP" = "$STATIC_IP" ]; then
     echo -e " 静态IP配置成功：$CURRENT_IP"
 else
     echo -e "\033[31m 静态IP配置失败，当前IP：$CURRENT_IP\033[0m"

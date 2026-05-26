@@ -15,7 +15,7 @@ fi
 
 # EMQX 检查
 $SSH_CMD root@$SERVER_B "emqx ctl status > /dev/null 2>&1"
-if[ $? -ne 0 ]; then
+if [ $? -ne 0 ]; then
     echo "[警告] EMQX 状态检查失败，尝试拉起服务..."
     $SSH_CMD root@$SERVER_B "emqx start"
 else

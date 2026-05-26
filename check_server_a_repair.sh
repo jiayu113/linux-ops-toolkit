@@ -16,7 +16,7 @@ fi
 
 # FreeSWITCH 运行状态维护
 FS_STATUS=$($SSH_CMD root@$SERVER_A "fs_cli -x 'sofia status' | grep 'RUNNING'")
-if[ -z "$FS_STATUS" ]; then
+if [ -z "$FS_STATUS" ]; then
     echo "[警告] FreeSWITCH 状态异常，尝试重启服务..."
     $SSH_CMD root@$SERVER_A "systemctl restart freeswitch"
 else
