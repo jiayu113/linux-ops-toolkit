@@ -1,103 +1,77 @@
-#  Linux Server Ops Toolkit | 运维自动化脚本工具箱
+# linux-ops-toolkit
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Bash](https://img.shields.io/badge/Language-Bash-green.svg)](https://www.gnu.org/software/bash/)
-[![Platform](https://img.shields.io/badge/Platform-Linux-lightgrey.svg)]()
+![Platform](https://img.shields.io/badge/Platform-Linux-lightgrey.svg)
 
-本仓库包含了一套基于 **Shell** 编写的生产级 Linux 服务器自动化运维脚本。涵盖了网络配置、核心服务（FreeSWITCH、EMQX、MySQL、Nginx、Java）的自动化部署、状态巡检、故障自愈、日志管理以及数据备份。
+一组用于多台 Linux 服务器日常运维的 Shell 脚本:服务巡检与自动拉起、MySQL / FreeSWITCH 备份、日志与录音归档清理、SSL 证书更新分发等。节点信息与凭据集中在 `env.sh`,由中控机通过 SSH 管理其余节点。
 
-脚本设计融入了 **IaC (基础设施即代码)** 的理念，通过统一的 `env.sh` 集中管理多服务器的基础设施凭据与状态，支持跨服务器的远程指令分发与执行。
+## 架构假设
 
-##  适用场景 & 架构假设
+脚本按"一台中控机 + 若干业务节点"组织,角色可按实际环境调整:
 
-本工具箱默认假设您拥有一个分布式或者主从架构的服务器集群。为了方便管理，脚本将节点分为以下几类（您可根据实际业务灵活调整）：
-- **中控机 (Control Node)**：运行大部分定时任务与巡检脚本的机器。
-- **Server A (通讯/存储节点)**：例如运行 FreeSWITCH 核心服务及 MySQL 数据库。
-- **Server B (业务/消息节点)**：例如运行 Java 业务后端程序及 EMQX 消息队列服务。
+```
+        中控机(跑定时任务与巡检脚本)
+         │ SSH            │ SSH
+    Server A          Server B
+    FreeSWITCH        Java 后端
+    MySQL             EMQX
+```
 
----
+## 脚本列表
 
-##  脚本功能目录
+| 脚本 | 说明 |
+|------|------|
+| `env.example.sh` | 配置模板:IP、端口、路径与服务凭据。多节点脚本均依赖复制出的 `env.sh` |
+| `set_static_ip.sh` | 基于 Netplan 配置静态 IP,自动检测网卡;带语法校验,连通性测试失败自动回滚 |
+| `fix_multi_ip.sh` | 修复 DHCP 与静态 IP 冲突导致的多 IP 问题,禁用 DHCP 并清理残留 IP |
+| `watchdog_server_b.sh` | 巡检业务节点,Java 进程或 EMQX 离线时自动拉起 |
+| `check_server_a_repair.sh` | 监控 MySQL 只读(锁表)状态并自动修复;检查 FreeSWITCH Sofia 模块,支持宕机重启 |
+| `mysql_backup.sh` | MySQL 备份:周日 mysqldump 全量 + 日常 binlog 增量;备份前自检服务状态、分析宕机日志 |
+| `fs_backup.sh` | FreeSWITCH 配置备份:只打包 `conf` / `scripts` / `db` 等恢复所需文件,不含缓存与录音 |
+| `archive_recordings.sh` | 从远端增量拉取历史录音归档,跳过当天活跃文件,清理远端空目录 |
+| `manage_server_a_logs.sh` | 通过 SSH 远程按天数压缩、清理 FreeSWITCH 日志 |
+| `update_certs.sh` | 提取 Let's Encrypt 新证书,分发并设置权限,热重载 Nginx / EMQX |
+| `install_nginx_static.sh` | Nginx 源码编译安装 |
+| `cpu.sh` | 输出 CPU 参数与负载报告:核数、频率、缓存、超线程、虚拟化、温度 |
 
-### 1.  网络与基础设施 (Networking)
-* `set_static_ip.sh`：自动检测物理网卡，基于 Netplan 一键配置静态 IP，带语法校验与网络连通性回滚测试。
-* `fix_multi_ip.sh`：一键修复由于 DHCP 和静态 IP 冲突导致的 Ubuntu 多 IP 问题，强制禁用 DHCP 并清理残留 IP。
+## 使用
 
-### 2.  环境配置 (Environment)
-* `env.example.sh`：**全局配置文件**。集中存储 IP、端口、目录路径及服务密码。所有多节点联动脚本均依赖此文件。
-
-### 3.  状态巡检与故障自愈 (Watchdog & Auto-Repair)
-* `watchdog_server_b.sh`：巡检业务节点（Server B），当检测到 Java 进程或 EMQX 离线时，自动拉起服务。
-* `check_server_a_repair.sh`：监控核心节点（Server A）。自动检测 MySQL 是否异常进入锁表（Read-Only）模式并修复；监控 FreeSWITCH Sofia 模块运行状态并提供宕机重启机制。
-
-### 4.  数据备份与灾备 (Backup & Disaster Recovery)
-* `mysql_backup.sh`：带有**故障自检逻辑**的 MySQL 备份方案。支持服务宕机日志分析、周日全量备份（Mysqldump）与日常增量备份（Binlog 同步）。
-* `fs_backup.sh`：FreeSWITCH 可恢复级核心配置备份方案。过滤臃肿的缓存与录音，仅打包 `conf`、`scripts`、`db` 等拉起服务所需的核心文件。
-
-### 5.  数据同步与日志清理 (Sync & Cleanup)
-* `archive_recordings.sh`：将远端（Server A）的历史录音文件增量拉取至归档服务器，利用 `--exclude` 安全绕过当天活跃文件，并自动清理远端空目录。
-* `manage_server_a_logs.sh`：通过 SSH 远程下发多行指令，自动按天数压缩、清理远端服务器的 FreeSWITCH 庞大日志文件。
-
-### 6.  安全与证书运维 (Security & SSL)
-* `update_certs.sh`：提取 Let's Encrypt 的新 SSL 证书，自动分发并赋予正确权限给 EMQX 目录，并在无缝热重载 Nginx/EMQX 服务。
-
-### 7.  性能与监控 (Monitoring)
-* `cpu.sh`：提供极致详尽的 Linux 主机 CPU 参数与负载统计报告，包括：物理核数、频率、缓存、超线程、虚拟化环境检测及实时温度信息。
-* `install_nginx_static.sh`：Nginx 源码编译级一键安装脚本。
-
----
-
-##  快速开始
-
-### 1. 克隆仓库
 ```bash
 git clone https://github.com/jiayu113/linux-ops-toolkit.git
-```
+cd linux-ops-toolkit
+chmod +x *.sh
 
-### 2. 配置环境变量 (关键步骤)
-将模板文件复制为系统读取的真实配置文件：
-```bash
 cp env.example.sh env.sh
+vim env.sh    # 填入实际的 IP、端口、凭据
 ```
-使用 `vim` 修改 `env.sh` 中的敏感信息（IP、端口、MySQL密码等）。
-> **⚠️ 提示**：此仓库已通过 `.gitignore` 忽略了 `env.sh`，防止您不小心将真实的服务器密码推送到公共代码库。
 
-### 3. 配置 SSH 免密登录 (用于跨服脚本)
-对于带有 `_server_a` / `_server_b` 的脚本，需要中控机能够无密码管理目标服务器。
-在中控机执行：
+`env.sh` 已在 `.gitignore` 中,不会被提交。
+
+跨节点脚本(带 `_server_a` / `_server_b` 后缀)需要中控机对目标节点免密登录:
+
 ```bash
 ssh-keygen -t rsa -b 4096 -N ""
-ssh-copy-id -p <YOUR_SSH_PORT> root@<SERVER_A_IP>
-ssh-copy-id -p <YOUR_SSH_PORT> root@<SERVER_B_IP>
+ssh-copy-id -p <SSH_PORT> ops@<SERVER_A_IP>
+ssh-copy-id -p <SSH_PORT> ops@<SERVER_B_IP>
 ```
 
-### 4. 配置自动化任务 (Crontab)
-建议通过 Linux Cron 定时执行这些脚本，示例 `crontab -e` 规则：
+巡检与备份类脚本建议交给 cron,`crontab -e` 示例:
+
 ```crontab
-# 每天凌晨 2:00 清理服务器日志
-0 2 * * * /path/to/manage_server_a_logs.sh >> /var/log/ops_logs.log 2>&1
-
-# 每天凌晨 3:00 归档昨日录音
-0 3 * * * /path/to/archive_recordings.sh >> /var/log/ops_archive.log 2>&1
-
-# 每天凌晨 4:00 备份 MySQL 和 FreeSWITCH 配置
-0 4 * * * /path/to/mysql_backup.sh
-30 4 * * * /path/to/fs_backup.sh
-
-# 每 5 分钟执行一次高可用巡检
-*/5 * * * * /path/to/watchdog_server_b.sh
-*/5 * * * * /path/to/check_server_a_repair.sh
+0 2 * * *    /path/to/manage_server_a_logs.sh >> /var/log/ops_logs.log 2>&1
+0 3 * * *    /path/to/archive_recordings.sh   >> /var/log/ops_archive.log 2>&1
+0 4 * * *    /path/to/mysql_backup.sh
+30 4 * * *   /path/to/fs_backup.sh
+*/5 * * * *  /path/to/watchdog_server_b.sh
+*/5 * * * *  /path/to/check_server_a_repair.sh
 ```
 
----
+## 注意
 
-##  最佳实践与注意事项
-1. **安全第一**：强烈建议在非 Root 用户的虚拟环境中测试后，再投入生产环境运行。
-2. **权限配置**：执行 `.sh` 脚本前，请确保具备可执行权限：`chmod +x *.sh`。
-3. **日志追踪**：多数守护脚本自带日志记录输出，方便后期排障（参考各脚本中的 `LOG_FILE` 变量）。
+- 先在测试机验证脚本行为,再用于生产环境
+- 网络类脚本(`set_static_ip.sh` / `fix_multi_ip.sh`)面向 Ubuntu / Netplan
+- 守护类脚本的日志路径见各脚本内 `LOG_FILE` 变量
 
-##  贡献指南
-欢迎提交 Issue 和 Pull Request，我们致力于打造更稳定、更轻量的服务器运维工具集合。
+## License
 
-##  开源许可
-本项目遵循 [MIT License](LICENSE) 许可协议。您可以自由地使用、修改和分发。
+[MIT](LICENSE)
